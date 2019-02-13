@@ -4,6 +4,7 @@ import atexit
 import itertools
 import os
 import sys
+import getopt
 import traceback
 from collections import Counter
 
@@ -220,20 +221,22 @@ class RoutersploitInterpreter(BaseInterpreter):
         self.modules_count.update([module.split('.')[0] for module in self.modules])
         self.main_modules_dirs = [module for module in os.listdir(MODULES_DIR) if not module.startswith("__")]
 
+        self.__handle_if_noninteractive(sys.argv[1:])
+
         self.__parse_prompt()
 
         self.banner = """ ______            _            _____       _       _ _
- | ___ \          | |          /  ___|     | |     (_) |
- | |_/ /___  _   _| |_ ___ _ __\ `--. _ __ | | ___  _| |_
- |    // _ \| | | | __/ _ \ '__|`--. \ '_ \| |/ _ \| | __|
- | |\ \ (_) | |_| | ||  __/ |  /\__/ / |_) | | (_) | | |_
- \_| \_\___/ \__,_|\__\___|_|  \____/| .__/|_|\___/|_|\__|
+ | ___ \\          | |          /  ___|     | |     (_) |
+ | |_/ /___  _   _| |_ ___ _ __\\ `--. _ __ | | ___  _| |_
+ |    // _ \\| | | | __/ _ \\ '__|`--. \\ '_ \\| |/ _ \\| | __|
+ | |\\ \\ (_) | |_| | ||  __/ |  /\\__/ / |_) | | (_) | | |_
+ \\_| \\_\\___/ \\__,_|\\__\\___|_|  \\____/| .__/|_|\\___/|_|\\__|
                                      | |
        Exploitation Framework for    |_|    by Threat9
             Embedded Devices
 
  Codename   : I Knew You Were Trouble
- Version    : 3.3.0
+ Version    : 3.4.0
  Homepage   : https://www.threat9.com - @threatnine
  Join Slack : https://www.threat9.com/slack
 
@@ -255,6 +258,38 @@ class RoutersploitInterpreter(BaseInterpreter):
         module_prompt_default_template = "\001\033[4m\002{host}\001\033[0m\002 (\001\033[91m\002{module}\001\033[0m\002) > "
         module_prompt_template = os.getenv("RSF_MODULE_PROMPT", module_prompt_default_template).replace('\\033', '\033')
         self.module_prompt_template = module_prompt_template if all(map(lambda x: x in module_prompt_template, ['{host}', "{module}"])) else module_prompt_default_template
+
+    def __handle_if_noninteractive(self, argv):
+        noninteractive = False
+        module = ""
+        set_opts = []
+
+        try:
+            opts, args = getopt.getopt(argv, "hxm:s:", ["module=", "set="])
+        except getopt.GetoptError:
+            print_info("{} -m <module> -s \"<option> <value>\"".format(sys.argv[0]))
+            sys.exit(2)
+
+        for opt, arg in opts:
+            if opt == "-h":
+                print_info("{} -x -m <module> -s \"<option> <value>\"".format(sys.argv[0]))
+                sys.exit(0)
+            elif opt == "-x":
+                noninteractive = True
+            elif opt in ("-m", "--module"):
+                module = arg
+            elif opt in ("-s", "--set"):
+                set_opts.append(arg)
+
+        if noninteractive:
+            self.command_use(module)
+
+            for opt in set_opts:
+                self.command_set(opt)
+
+            self.command_exploit()
+
+            sys.exit(0)
 
     @property
     def module_metadata(self):
@@ -345,13 +380,6 @@ class RoutersploitInterpreter(BaseInterpreter):
     def command_set(self, *args, **kwargs):
         key, _, value = args[0].partition(" ")
         if key in self.current_module.options:
-            if key == "encoder":
-                value = self.current_module.get_encoder(value)
-
-                if not value:
-                    print_error("Encoder not available. Check available encoders with `show encoders`.")
-                    return
-
             setattr(self.current_module, key, value)
             self.current_module.exploit_attributes[key][0] = value
 
